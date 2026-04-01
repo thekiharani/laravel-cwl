@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [none]
+    tags: ["v*"]
+  pull_request:
+    branches: [none]
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      matrix:
+        php: ["8.2", "8.3", "8.4", "8.5"]
+
+    name: PHP ${{ matrix.php }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: xdebug
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run tests
+        run: ./vendor/bin/pest --coverage
+
+  release:
+    needs: test
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Update Packagist
+        run: |
+          curl -XPOST \
+            -H 'Content-Type: application/json' \
+            'https://packagist.org/api/update-package?username=thekiharani&apiToken=${{ secrets.PACKAGIST_TOKEN }}' \
+            -d '{"repository":{"url":"https://github.com/thekiharani/laravel-cwl"}}'
