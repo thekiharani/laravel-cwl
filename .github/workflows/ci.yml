@@ -5,7 +5,7 @@ on:
     branches: [main, release]
     tags: ["v*"]
   pull_request:
-    branches: [main]
+    branches: [main, release]
 
 jobs:
   test:
