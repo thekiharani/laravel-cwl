@@ -1,11 +1,11 @@
-# Laravel CloudWatch Logger
+# Laravel CWL
 
-AWS CloudWatch log driver for Laravel. Drop-in replacement — just switch your log channel.
+AWS CloudWatch Logs driver for Laravel. Drop-in replacement — just switch your log channel.
 
 ## Installation
 
 ```bash
-composer require norialabs/laravel-cloudwatch-logger
+composer require thekiharani/laravel-cwl
 ```
 
 The service provider is auto-discovered. To publish the config:
