@@ -31,12 +31,17 @@ class CloudWatchLoggerFactory
         $client = new CloudWatchLogsClient($clientConfig);
 
         $handler = new CloudWatchHandler(
-            client:    $client,
-            logGroup:  $cwConfig['log_group'],
-            logStream: $cwConfig['log_stream'],
-            retention: $cwConfig['retention'],
-            batchSize: $cwConfig['batch_size'],
-            level:     Level::fromName($config['level'] ?? $cwConfig['level']),
+            client:        $client,
+            logGroup:      $cwConfig['log_group'],
+            logStream:     $cwConfig['log_stream'],
+            retention:     $cwConfig['retention'],
+            batchSize:     $cwConfig['batch_size'],
+            level:         Level::fromName($config['level'] ?? $cwConfig['level']),
+            tags:          $cwConfig['tags'] ?? [],
+            streamContext: [
+                'app' => (string) app('config')->get('app.name', 'laravel'),
+                'env' => (string) app('config')->get('app.env', 'production'),
+            ],
         );
 
         $handler->setFormatter(new JsonFormatter());

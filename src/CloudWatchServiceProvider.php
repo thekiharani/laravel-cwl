@@ -16,7 +16,7 @@ class CloudWatchServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__ . '/../config/cloudwatch.php' => config_path('cloudwatch.php'),
-            ], 'cloudwatch-config');
+            ]);
         }
 
         $this->app->make('log')->extend('cloudwatch', function ($app, array $config) {

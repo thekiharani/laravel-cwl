@@ -13,14 +13,25 @@ class CloudWatchHandler extends AbstractProcessingHandler
 {
     private CloudWatchLogsClient $client;
     private string $logGroup;
-    private string $logStream;
+    private string $logStreamTemplate;
     private ?int $retention;
     private int $batchSize;
+    /** @var array<string, string> */
+    private array $tags;
+    /** @var array<string, string> */
+    private array $streamContext;
+
+    private ?string $resolvedStream = null;
     private bool $initialized = false;
 
     /** @var array<int, array{timestamp: int, message: string}> */
     private array $buffer = [];
 
+    /**
+     * @param  string  $logStream  Stream name or template with placeholders: {app}, {env}, {date}, {hostname}
+     * @param  array<string, string>  $tags  Key-value tags applied to the log group on creation.
+     * @param  array<string, string>  $streamContext  Values for {app} and {env} placeholders. {date} and {hostname} are always resolved at flush time.
+     */
     public function __construct(
         CloudWatchLogsClient $client,
         string $logGroup,
@@ -29,14 +40,18 @@ class CloudWatchHandler extends AbstractProcessingHandler
         int $batchSize = 25,
         int|string|Level $level = Level::Debug,
         bool $bubble = true,
+        array $tags = [],
+        array $streamContext = [],
     ) {
         parent::__construct($level, $bubble);
 
         $this->client = $client;
         $this->logGroup = $logGroup;
-        $this->logStream = $logStream;
+        $this->logStreamTemplate = $logStream;
         $this->retention = $retention;
         $this->batchSize = $batchSize;
+        $this->tags = $tags;
+        $this->streamContext = $streamContext;
     }
 
     protected function write(LogRecord $record): void
@@ -57,6 +72,14 @@ class CloudWatchHandler extends AbstractProcessingHandler
             return;
         }
 
+        $stream = $this->resolveStream();
+
+        // If the stream changed (e.g. date rolled over), reinitialize.
+        if ($stream !== $this->resolvedStream) {
+            $this->resolvedStream = $stream;
+            $this->initialized = false;
+        }
+
         $this->ensureInitialized();
 
         // CloudWatch requires events sorted by timestamp.
@@ -65,7 +88,7 @@ class CloudWatchHandler extends AbstractProcessingHandler
         try {
             $this->client->putLogEvents([
                 'logGroupName'  => $this->logGroup,
-                'logStreamName' => $this->logStream,
+                'logStreamName' => $this->resolvedStream,
                 'logEvents'     => $this->buffer,
             ]);
         } catch (CloudWatchLogsException $e) {
@@ -76,7 +99,7 @@ class CloudWatchHandler extends AbstractProcessingHandler
 
                 $this->client->putLogEvents([
                     'logGroupName'  => $this->logGroup,
-                    'logStreamName' => $this->logStream,
+                    'logStreamName' => $this->resolvedStream,
                     'logEvents'     => $this->buffer,
                 ]);
             } else {
@@ -103,6 +126,20 @@ class CloudWatchHandler extends AbstractProcessingHandler
         return new JsonFormatter();
     }
 
+    private function resolveStream(): string
+    {
+        return str_replace(
+            ['{app}', '{env}', '{date}', '{hostname}'],
+            [
+                $this->streamContext['app'] ?? 'laravel',
+                $this->streamContext['env'] ?? 'production',
+                date('Y-m-d'),
+                gethostname() ?: 'unknown',
+            ],
+            $this->logStreamTemplate,
+        );
+    }
+
     private function ensureInitialized(): void
     {
         if ($this->initialized) {
@@ -118,9 +155,13 @@ class CloudWatchHandler extends AbstractProcessingHandler
     private function ensureLogGroupExists(): void
     {
         try {
-            $this->client->createLogGroup([
-                'logGroupName' => $this->logGroup,
-            ]);
+            $params = ['logGroupName' => $this->logGroup];
+
+            if (! empty($this->tags)) {
+                $params['tags'] = $this->tags;
+            }
+
+            $this->client->createLogGroup($params);
 
             if ($this->retention !== null) {
                 $this->client->putRetentionPolicy([
@@ -140,7 +181,7 @@ class CloudWatchHandler extends AbstractProcessingHandler
         try {
             $this->client->createLogStream([
                 'logGroupName'  => $this->logGroup,
-                'logStreamName' => $this->logStream,
+                'logStreamName' => $this->resolvedStream,
             ]);
         } catch (CloudWatchLogsException $e) {
             if ($e->getAwsErrorCode() !== 'ResourceAlreadyExistsException') {

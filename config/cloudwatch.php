@@ -24,13 +24,23 @@ return [
     | Log Group & Stream
     |--------------------------------------------------------------------------
     |
-    | The CloudWatch log group and stream name. The stream defaults to the
-    | application name + environment so logs are separated per deploy.
+    | The CloudWatch log group and stream name. The stream supports placeholders
+    | that are resolved at runtime:
+    |
+    |   {app}        - APP_NAME
+    |   {env}        - APP_ENV
+    |   {date}       - Current date (Y-m-d)
+    |   {hostname}   - Machine hostname
+    |
+    | Examples:
+    |   "my-app-production"
+    |   "{app}-{env}-{date}"
+    |   "{app}-{hostname}"
     |
     */
 
     'log_group'  => env('CLOUDWATCH_LOG_GROUP', env('APP_NAME', 'laravel')),
-    'log_stream' => env('CLOUDWATCH_LOG_STREAM', env('APP_NAME', 'laravel') . '-' . env('APP_ENV', 'production')),
+    'log_stream' => env('CLOUDWATCH_LOG_STREAM', '{app}-{env}'),
 
     /*
     |--------------------------------------------------------------------------
@@ -67,4 +77,19 @@ return [
     */
 
     'level' => env('CLOUDWATCH_LOG_LEVEL', 'debug'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tags
+    |--------------------------------------------------------------------------
+    |
+    | Key-value tags applied to the log group when it is created. Useful for
+    | cost allocation, filtering, and organization in the AWS console.
+    |
+    | Example:
+    |   'tags' => ['team' => 'backend', 'project' => 'noria'],
+    |
+    */
+
+    'tags' => [],
 ];
